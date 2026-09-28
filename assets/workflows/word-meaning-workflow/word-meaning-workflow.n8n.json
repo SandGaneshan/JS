@@ -1,0 +1,277 @@
+{
+    "name": "Word Meaning Finder",
+    "description": "Accepts a word via webhook POST, uses SAP AI Core to find its meaning, then routes the result to SAP Task Center for human review. The webhook acknowledges immediately; SAP Task Center waits for the reviewer's decision and routes to an approved or rejected branch.",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "word-meaning-finder-bb112/word-meaning-workflow/word-lookup",
+                "responseMode": "onReceived",
+                "options": {}
+            },
+            "id": "8a4f2f1a-6d90-498d-9d7d-21d8c710679f",
+            "name": "Word Lookup",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2.1,
+            "position": [
+                -400,
+                0
+            ],
+            "webhookId": "e48247f7-f97c-4b30-baab-8a905787cf96"
+        },
+        {
+            "parameters": {
+                "modelName": {
+                    "__rl": true,
+                    "value": "gpt-4.1",
+                    "mode": "list",
+                    "cachedResultName": "GPT-4.1"
+                },
+                "userMessage": "={{ 'Find the meaning of the following word and provide a clear, concise definition: ' + $json.body.word }}",
+                "systemPrompt": "You are a helpful dictionary assistant. When given a word, provide its definition, part of speech, and a brief usage example.",
+                "modelParams": {
+                    "max_tokens": 512,
+                    "temperature": 0.3
+                }
+            },
+            "id": "a6e5b0e5-0384-4bba-b16f-fb40252b256b",
+            "name": "Find Word Meaning",
+            "type": "CUSTOM.sapOrchestration",
+            "typeVersion": 1,
+            "position": [
+                -160,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "subject": "={{ 'Word Meaning Review: ' + $('Word Lookup').item.json.body.word }}",
+                "priority": "MEDIUM",
+                "description": "={{ 'AI-generated meaning for the word \"' + $('Word Lookup').item.json.body.word + '\":\\n\\n' + $json.output }}",
+                "recipients": {
+                    "recipientValues": [
+                        {
+                            "userId": "sa.g@sap.com"
+                        }
+                    ]
+                },
+                "taskDefinition": {
+                    "definitionName": "Review Word Meaning"
+                }
+            },
+            "id": "eddf2fb4-ae22-4e51-98ff-87dc5c2b821e",
+            "name": "Review Word Meaning",
+            "type": "CUSTOM.sapTaskCenter",
+            "typeVersion": 1,
+            "position": [
+                80,
+                0
+            ],
+            "webhookId": "a21a7efc-8c99-49a3-92ce-f7f6156baf98"
+        },
+        {
+            "parameters": {
+                "mode": "rules",
+                "rules": {
+                    "values": [
+                        {
+                            "conditions": {
+                                "options": {
+                                    "caseSensitive": true,
+                                    "leftValue": "",
+                                    "typeValidation": "strict"
+                                },
+                                "conditions": [
+                                    {
+                                        "leftValue": "={{ $json.result.response }}",
+                                        "rightValue": "approved",
+                                        "operator": {
+                                            "type": "string",
+                                            "operation": "equals"
+                                        }
+                                    }
+                                ],
+                                "combinator": "and"
+                            },
+                            "renameOutput": true,
+                            "outputKey": "approved"
+                        },
+                        {
+                            "conditions": {
+                                "options": {
+                                    "caseSensitive": true,
+                                    "leftValue": "",
+                                    "typeValidation": "strict"
+                                },
+                                "conditions": [
+                                    {
+                                        "leftValue": "={{ $json.result.response }}",
+                                        "rightValue": "rejected",
+                                        "operator": {
+                                            "type": "string",
+                                            "operation": "equals"
+                                        }
+                                    }
+                                ],
+                                "combinator": "and"
+                            },
+                            "renameOutput": true,
+                            "outputKey": "rejected"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "5b90ff48-5541-44fe-ac56-231f81b51544",
+            "name": "Route Review Decision",
+            "type": "n8n-nodes-base.switch",
+            "typeVersion": 3.4,
+            "position": [
+                320,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "assignments": {
+                    "assignments": [
+                        {
+                            "id": "field-approved-status",
+                            "name": "status",
+                            "value": "approved",
+                            "type": "string"
+                        },
+                        {
+                            "id": "field-approved-word",
+                            "name": "word",
+                            "value": "={{ $('Word Lookup').item.json.body.word }}",
+                            "type": "string"
+                        },
+                        {
+                            "id": "field-approved-meaning",
+                            "name": "meaning",
+                            "value": "={{ $('Find Word Meaning').item.json.output }}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "8d156934-85c4-46b4-8fb5-e115e80da9c8",
+            "name": "Set Approved Result",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.4,
+            "position": [
+                560,
+                -100
+            ]
+        },
+        {
+            "parameters": {
+                "assignments": {
+                    "assignments": [
+                        {
+                            "id": "field-rejected-status",
+                            "name": "status",
+                            "value": "rejected",
+                            "type": "string"
+                        },
+                        {
+                            "id": "field-rejected-word",
+                            "name": "word",
+                            "value": "={{ $('Word Lookup').item.json.body.word }}",
+                            "type": "string"
+                        },
+                        {
+                            "id": "field-rejected-meaning",
+                            "name": "meaning",
+                            "value": "={{ $('Find Word Meaning').item.json.output }}",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "893d6234-e1ad-4dc8-a7c6-54d4fc2b3353",
+            "name": "Set Rejected Result",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.4,
+            "position": [
+                560,
+                100
+            ]
+        }
+    ],
+    "connections": {
+        "Word Lookup": {
+            "main": [
+                [
+                    {
+                        "node": "Find Word Meaning",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Find Word Meaning": {
+            "main": [
+                [
+                    {
+                        "node": "Review Word Meaning",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Review Word Meaning": {
+            "main": [
+                [
+                    {
+                        "node": "Route Review Decision",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Route Review Decision": {
+            "main": [
+                [
+                    {
+                        "node": "Set Approved Result",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Set Rejected Result",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {
+        "Find Word Meaning": [
+            {
+                "output": "Ephemeral (adjective): lasting for a very short time. Example: 'The morning mist was ephemeral, disappearing as soon as the sun rose.'"
+            }
+        ],
+        "Review Word Meaning": [
+            {
+                "result": {
+                    "response": "approved",
+                    "respondedAt": "2025-01-15T10:30:00Z"
+                }
+            }
+        ]
+    },
+    "meta": {
+        "templateCredsSetupCompleted": true
+    },
+    "id": "HL3Zb9NQLuC0VQkU"
+}

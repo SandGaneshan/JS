@@ -1,0 +1,10 @@
+apiVersion: solution.sap/v1
+kind: Solution
+
+metadata:
+  name: word-meaning-finder-bb112
+  version: "1.0.0"
+  description: "Workflow that takes a word via webhook, finds its meaning using SAP AI Core, and sends the result to SAP Task Center for review."
+
+assets:
+  - ref: ./assets/workflows/word-meaning-workflow/asset.yaml
